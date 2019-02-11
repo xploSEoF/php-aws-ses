@@ -527,9 +527,13 @@ final class SimpleEmailServiceMessage {
         }
 
         $raw_message .= 'MIME-Version: 1.0' . "\n";
-        $raw_message .= 'Content-type: ' . ($this->hasInlineAttachments() ? 'multipart/related' : 'Multipart/Mixed') . '; boundary="' . $boundary . '"' . "\n";
-        $raw_message .= "\n--{$boundary}\n";
-        $raw_message .= 'Content-type: Multipart/Alternative; boundary="alt-' . $boundary . '"' . "\n";
+        $raw_message .= 'Content-type: multipart/mixed; boundary="mixed-' . $boundary . '"' . "\n";
+
+        $raw_message .= "\n--mixed-{$boundary}\n";
+        $raw_message .= 'Content-type: multipart/related; boundary="inline-' . $boundary . '"' . "\n";
+
+        $raw_message .= "\n--inline-{$boundary}\n";
+        $raw_message .= 'Content-type: multipart/alternative; boundary="alt-' . $boundary . '"' . "\n";
 
         if ($this->messagetext != null && strlen($this->messagetext) > 0) {
             $charset = empty($this->messageTextCharset) ? '' : "; charset=\"{$this->messageTextCharset}\"";
@@ -547,17 +551,38 @@ final class SimpleEmailServiceMessage {
         $raw_message .= "\n--alt-{$boundary}--\n";
 
         foreach ($this->attachments as $attachment) {
-            $raw_message .= "\n--{$boundary}\n";
-            $raw_message .= 'Content-Type: ' . $attachment['mimeType'] . '; name="' . $attachment['name'] . '"' . "\n";
-            $raw_message .= 'Content-Disposition: ' . $attachment['attachmentType'] . "\n";
-            if (!empty($attachment['contentId'])) {
-                $raw_message .= 'Content-ID: ' . $attachment['contentId'] . '' . "\n";
+            if ($attachment['inline']) {
+                $raw_message .= "\n--inline-{$boundary}\n";
+                $raw_message .= 'Content-Type: ' . $attachment['mimeType'] . '; name="' . $attachment['name'] . '"' . "\n";
+                $raw_message .= 'Content-Disposition: ' . $attachment['attachmentType'] . "\n";
+                $raw_message .= 'Content-Transfer-Encoding: base64' . "\n";
+                if ( ! empty($attachment['contentId'])) {
+                    $contentId = trim($attachment['contentId'], '<>');
+                    $raw_message .= 'X-Attachment-Id: '.$contentId . "\n";
+                    $raw_message .= 'Content-ID: <' . $contentId . '>' . "\n";
+                }
+                $raw_message .= "\n" . chunk_split(base64_encode($attachment['data']), 76, "\n") . "\n";
             }
-            $raw_message .= 'Content-Transfer-Encoding: base64' . "\n";
-            $raw_message .= "\n" . chunk_split(base64_encode($attachment['data']), 76, "\n") . "\n";
         }
 
-        $raw_message .= "\n--{$boundary}--\n";
+        $raw_message .= "\n--inline-{$boundary}--\n";
+
+        foreach ($this->attachments as $attachment) {
+            if ( ! $attachment['inline']) {
+                $raw_message .= "\n--mixed-{$boundary}\n";
+                $raw_message .= 'Content-Type: ' . $attachment['mimeType'] . '; name="' . $attachment['name'] . '"' . "\n";
+                $raw_message .= 'Content-Disposition: ' . $attachment['attachmentType'] . "\n";
+                $raw_message .= 'Content-Transfer-Encoding: base64' . "\n";
+                if ( ! empty($attachment['contentId'])) {
+                    $contentId = trim($attachment['contentId'], '<>');
+                    $raw_message .= 'X-Attachment-Id: '.$contentId . "\n";
+                    $raw_message .= 'Content-ID: <' . $contentId . '>' . "\n";
+                }
+                $raw_message .= "\n" . chunk_split(base64_encode($attachment['data']), 76, "\n") . "\n";
+            }
+        }
+
+        $raw_message .= "\n--mixed-{$boundary}--\n";
 
         if (!$encode) {
             return $raw_message;
