@@ -415,6 +415,7 @@ final class SimpleEmailServiceMessage {
             'data' => $data,
             'contentId' => $contentId,
             'attachmentType' => ($attachmentType == 'inline' ? 'inline; filename="' . $name . '"' : $attachmentType),
+            'inline' => $attachmentType == 'inline',
         );
 
         $this->is_clean = false;
@@ -472,7 +473,7 @@ final class SimpleEmailServiceMessage {
      */
     public function hasInlineAttachments() {
         foreach ($this->attachments as $attachment) {
-            if ($attachment['attachmentType'] != 'attachment') {
+            if ($attachment['inline']) {
                 return true;
             }
 
